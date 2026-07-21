@@ -16,3 +16,6 @@ altair>=5.2.0             # charts inside the dashboard
 
 # IoT integration (optional — only needed for the MQTT publisher step)
 paho-mqtt>=2.1.0          # publish detection records to an MQTT broker
+
+# Hardware edge node (optional — only needed for the Arduino/Arducam camera)
+pyserial>=3.5            # read JPEG frames from the Arduino over USB serial

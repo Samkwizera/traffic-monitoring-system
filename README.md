@@ -16,8 +16,9 @@ Built with **Python + OpenCV + YOLOv8 (Ultralytics)** and a **Streamlit** dashbo
 4. [Running the prototype](#running-the-prototype)
 5. [Tuning & configuration](#tuning--configuration)
 6. [Development roadmap (MVP → IoT)](#development-roadmap-mvp--iot)
-7. [Connecting to real IoT cameras](#connecting-to-real-iot-cameras)
-8. [Troubleshooting](#troubleshooting)
+7. [Hardware demo: Arduino Nano 33 BLE + Arducam OV2640](#hardware-demo-arduino-nano-33-ble--arducam-ov2640)
+8. [Connecting to real IoT cameras](#connecting-to-real-iot-cameras)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -58,9 +59,14 @@ traffic-monitoring-system/
 │   ├── logger.py            # append detection records to CSV
 │   ├── routing.py           # rank roads + recommend least-congested route
 │   ├── iot_publisher.py     # MQTT publisher stub (IoT integration step)
+│   ├── camera_serial.py     # read Arducam JPEG frames from Arduino over serial
 │   └── dashboard.py         # Streamlit dashboard (main UI)
+├── arduino/
+│   └── arducam_traffic/
+│       └── arducam_traffic.ino  # Nano 33 BLE: OV2640 capture + serial + LED
 ├── scripts/
 │   ├── detect_cli.py        # MVP step 1 — command-line detector
+│   ├── live_camera.py       # live loop: Arducam -> YOLO -> density -> LED
 │   ├── download_samples.py  # fetch sample traffic images into data/samples/
 │   └── seed_demo_data.py    # seed demo readings for Compare/Route tabs
 ├── data/
@@ -174,7 +180,83 @@ The project is built in incremental, working slices:
 - **Step 3 — Records & density ✅**  `app/density.py` + `app/logger.py`: Low/Moderate/High + CSV logging with location/date/time.
 - **Step 4 — Dashboard ✅**  `app/dashboard.py`: upload, visualise, save readings.
 - **Step 5 — Compare & route ✅**  `app/routing.py`: rank roads, recommend alternatives.
-- **Step 6 — IoT integration (next)**  live camera streams, a database, and a map. See below.
+- **Step 6 — Hardware edge node ✅**  Arduino Nano 33 BLE + Arducam OV2640 as a live camera + LED traffic light (see [hardware demo](#hardware-demo-arduino-nano-33-ble--arducam-ov2640)).
+- **Step 7 — Full IoT deployment (next)**  many cameras, a database, a map, MQTT/BLE at scale. See below.
+
+---
+
+## Hardware demo: Arduino Nano 33 BLE + Arducam OV2640
+
+This turns the prototype into a real (if small) IoT loop using an **Arducam Mini
+2MP Plus (OV2640)** as the traffic camera and an **Arduino Nano 33 BLE** as the
+edge node + traffic-light actuator.
+
+### What each part does
+| Part | Role |
+|---|---|
+| **Arducam OV2640** | The camera — captures a JPEG frame on request |
+| **Arduino Nano 33 BLE** | Grabs the frame, streams it to the laptop, drives its on-board RGB LED |
+| **Laptop** | Runs YOLO (the Arduino *cannot*), counts vehicles, classifies density |
+| **On-board RGB LED** | The traffic signal: 🟢 Low · 🟠 Moderate · 🔴 High |
+
+```
+[Arducam OV2640] --SPI--> [Nano 33 BLE] <==USB serial==> [Laptop: YOLO -> density]
+                             RGB LED  <---(same USB serial: 0/1/2)---
+```
+
+> **Why USB serial, not BLE, for images?** BLE on the Nano 33 BLE is ~1–2 KB/s —
+> far too slow for JPEGs. We stream frames over USB serial and send the 1-byte
+> LED command back over the *same* cable. BLE is documented as the wireless
+> upgrade path (see the next section).
+
+> **Expect periodic snapshots, not 30 fps.** Capture + serial transfer + CPU
+> inference gives roughly a frame every 1–3 s — which is exactly right for
+> traffic-density sampling at a junction.
+
+### 1. Wiring (Arducam Mini 2MP Plus → Nano 33 BLE)
+Both run at 3.3 V, so no level shifting is needed.
+
+| Arducam pin | Nano 33 BLE pin |
+|---|---|
+| CS  | D7 |
+| MOSI | D11 |
+| MISO | D12 |
+| SCK | D13 |
+| SDA | A4 |
+| SCL | A5 |
+| VCC | 3V3 |
+| GND | GND |
+
+### 2. Flash the Arduino
+1. In the Arduino IDE, install the board package **"Arduino Mbed OS Nano Boards"**
+   (gives you the Nano 33 BLE) and the **"ArduCAM"** library (Library Manager).
+2. Open the ArduCAM library's `memorysaver.h` and enable **only**:
+   ```c
+   #define OV2640_MINI_2MP_PLUS
+   ```
+   (comment out every other `#define ... _MINI_...` line).
+3. Open [`arduino/arducam_traffic/arducam_traffic.ino`](arduino/arducam_traffic/arducam_traffic.ino),
+   select the board + port, and **Upload**. The LED blinks red if it can't find
+   the camera (recheck wiring); otherwise it prints `READY` on the serial monitor.
+
+### 3. Run the live loop on the laptop
+```bash
+# find the board's port
+python scripts/live_camera.py --list-ports
+
+# start the loop (drives the LED, logs each reading, optional live window)
+python scripts/live_camera.py --port COM5 --location "KN 1 Rd - City Centre" --show
+```
+Each cycle prints e.g. `12 vehicles (car: 9, motorcycle: 3) -> Moderate density`,
+turns the LED amber, and appends a record to `data/results/detections_log.csv` —
+which flows straight into the dashboard's **Compare** and **Route** tabs. Add
+`--mqtt` to also publish each reading to a broker.
+
+> **If the ArduCAM library won't compile for the Nano 33 BLE** (nRF52840/mbed
+> support varies by library version), the most reliable fallback is to run the
+> OV2640 on an **ESP32-CAM** (streams MJPEG over Wi-Fi — consume it with
+> `cv2.VideoCapture("http://<esp32-ip>:81/stream")`, no code changes to the
+> detector) and keep the Nano 33 BLE purely as the **BLE traffic-light actuator**.
 
 ---
 
