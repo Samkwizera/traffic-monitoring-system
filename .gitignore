@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# YOLO model weights (downloaded on first run — keep repo light)
+models/*.pt
+*.pt
+
+# Generated outputs
+data/results/*.csv
+data/results/*.jpg
+data/results/*.mp4
+outputs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Local Claude Code settings (machine-specific)
+.claude/

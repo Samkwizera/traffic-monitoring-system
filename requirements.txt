@@ -1,0 +1,18 @@
+# Smart Traffic-Density Monitoring System — dependencies
+# -----------------------------------------------------
+# Verified working on Python 3.14 (torch 2.13 ships cp314 wheels).
+# Python 3.11–3.14 are all fine. Always install inside a virtual env.
+
+# Core computer vision + object detection
+ultralytics>=8.2.0        # YOLOv8/v11 detection API (pulls in torch)
+opencv-python>=4.9.0      # image/video decoding, drawing bounding boxes
+numpy>=1.26              # array math (let pip pick a wheel for your Python)
+Pillow>=10.0.0            # image handling for Streamlit
+
+# Dashboard
+streamlit>=1.36.0         # web dashboard
+pandas>=2.1.0             # detection logs / comparison tables
+altair>=5.2.0             # charts inside the dashboard
+
+# IoT integration (optional — only needed for the MQTT publisher step)
+paho-mqtt>=2.1.0          # publish detection records to an MQTT broker
