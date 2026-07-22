@@ -33,6 +33,7 @@ from app import config                                   # noqa: E402
 from app.density import density_color                    # noqa: E402
 from app.logger import log_detection, load_log, latest_per_location  # noqa: E402
 from app.routing import rank_roads, recommend_route      # noqa: E402
+from app.mapping import build_map                        # noqa: E402
 
 
 # --------------------------------------------------------------------------
@@ -190,6 +191,9 @@ with tab_compare:
         c2.error(f"Busiest: **{busiest['location']}** ({busiest['density']})",
                  icon=":material/priority_high:")
 
+        st.markdown("#### Congestion map")
+        st.pydeck_chart(build_map(latest), use_container_width=True)
+
     with st.expander("View full detection log"):
         st.dataframe(load_log(), use_container_width=True, hide_index=True)
 
@@ -218,10 +222,16 @@ with tab_route:
             unsafe_allow_html=True,
         )
 
+    # Map: roads coloured by density; the recommended detour highlighted (blue).
+    st.markdown("#### Congestion map")
+    st.pydeck_chart(build_map(latest, rec), use_container_width=True)
     st.caption(
-        "Alternatives come from the road graph in `app/config.py` "
-        "(`LOCATIONS[...].connects_to`). Replace with a real routing engine "
-        "(OSRM / Google Directions) for production."
+        "Markers are monitored roads coloured by current density "
+        "(green = Low, amber = Moderate, red = High); grey lines are the road "
+        "graph; the blue line is the recommended detour. Coordinates in "
+        "`app/config.py` are approximate Kigali placeholders — set each to its "
+        "real camera GPS, and swap the road graph for a routing engine "
+        "(OSRM / Google Directions) in production."
     )
 
 

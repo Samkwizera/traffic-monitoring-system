@@ -92,24 +92,41 @@ DENSITY_COLORS = {
 # --------------------------------------------------------------------------
 # In a real deployment each entry maps to a physical IoT camera. The
 # `connects_to` field is a lightweight road graph used by the route
-# recommender to suggest alternatives.
+# recommender to suggest alternatives, and `coords` (lat, lon) places the
+# camera on the map. Coordinates below are APPROXIMATE Kigali placeholders —
+# replace them with each camera's real GPS position on deployment.
 LOCATIONS = {
     "KN 1 Rd - City Centre": {
         "connects_to": ["RN1 - Nyanza Rd", "KG 11 Ave - Kimironko"],
+        "coords": (-1.9499, 30.0589),
     },
     "RN1 - Nyanza Rd": {
         "connects_to": ["KN 1 Rd - City Centre", "KK 15 Rd - Kicukiro"],
+        "coords": (-1.9820, 30.0730),
     },
     "KG 11 Ave - Kimironko": {
         "connects_to": ["KN 1 Rd - City Centre", "KK 15 Rd - Kicukiro"],
+        "coords": (-1.9540, 30.1140),
     },
     "KK 15 Rd - Kicukiro": {
         "connects_to": ["RN1 - Nyanza Rd", "KG 11 Ave - Kimironko"],
+        "coords": (-1.9840, 30.1030),
     },
     "RN3 - Rusizi Highway": {
         "connects_to": ["KK 15 Rd - Kicukiro"],
+        "coords": (-2.0100, 30.0400),
     },
 }
+
+# Map centre + zoom for the dashboard (roughly Kigali).
+MAP_CENTER = (-1.9700, 30.0750)
+MAP_ZOOM = 11
+
+
+def density_rgb(level: str) -> list[int]:
+    """Return an [R, G, B] colour for a density level (for map layers)."""
+    hex_color = DENSITY_COLORS.get(level, DENSITY_COLORS["Unknown"]).lstrip("#")
+    return [int(hex_color[i:i + 2], 16) for i in (0, 2, 4)]
 
 DEFAULT_LOCATION = "KN 1 Rd - City Centre"
 

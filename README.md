@@ -58,6 +58,7 @@ traffic-monitoring-system/
 │   ├── density.py           # count → Low/Moderate/High classification
 │   ├── logger.py            # append detection records to CSV
 │   ├── routing.py           # rank roads + recommend least-congested route
+│   ├── mapping.py           # pydeck congestion map (roads + highlighted detour)
 │   ├── iot_publisher.py     # MQTT publisher stub (IoT integration step)
 │   ├── camera_serial.py     # read Arducam JPEG frames from Arduino over serial
 │   └── dashboard.py         # Streamlit dashboard (main UI)
@@ -147,9 +148,11 @@ Then open the URL Streamlit prints (usually http://localhost:8501).
 - **Detect** — upload an image/video, view bounding boxes, total count,
   density level and per-class breakdown; save the reading with location + timestamp.
 - **Compare roads** — table + chart ranking every monitored road from clearest
-  to busiest, with the current clearest/busiest highlighted.
+  to busiest, with the current clearest/busiest highlighted, plus a **congestion
+  map** with each road coloured by density.
 - **Route recommendation** — pick a destination road; get the least-congested
-  connected alternative.
+  connected alternative, shown on an **interactive map** where the recommended
+  detour is highlighted in blue.
 
 ---
 
