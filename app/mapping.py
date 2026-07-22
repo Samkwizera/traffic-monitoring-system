@@ -17,7 +17,6 @@ import pydeck as pdk
 
 from . import config
 
-_UNKNOWN_RGB = config.density_rgb("Unknown")
 _HIGHLIGHT_RGB = [30, 136, 229]   # blue — the recommended route
 
 
