@@ -28,7 +28,7 @@ import cv2
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import config                       # noqa: E402
-from app.camera_serial import ArduCamSerial, list_ports  # noqa: E402
+from app.camera_serial import ArduCamSerial, MockArduCam, list_ports  # noqa: E402
 from app.detector import get_detector        # noqa: E402
 from app.logger import log_detection         # noqa: E402
 
@@ -45,6 +45,10 @@ def main() -> int:
                         help="Show the annotated frame in an OpenCV window")
     parser.add_argument("--no-log", action="store_true", help="Do not write CSV logs")
     parser.add_argument("--mqtt", action="store_true", help="Also publish over MQTT")
+    parser.add_argument("--mock", action="store_true",
+                        help="No hardware: cycle through data/samples/ images")
+    parser.add_argument("--samples", default=None,
+                        help="Folder of images for --mock (default: data/samples/)")
     parser.add_argument("--list-ports", action="store_true",
                         help="List serial ports and exit")
     args = parser.parse_args()
@@ -52,8 +56,9 @@ def main() -> int:
     if args.list_ports:
         print("Available serial ports:", list_ports() or "(none found)")
         return 0
-    if not args.port:
-        print("ERROR: --port is required (see --list-ports).", file=sys.stderr)
+    if not args.mock and not args.port:
+        print("ERROR: --port is required (or use --mock). See --list-ports.",
+              file=sys.stderr)
         return 2
 
     detector = get_detector()
@@ -63,9 +68,13 @@ def main() -> int:
         from app.iot_publisher import TrafficMQTTPublisher
         mqtt_pub = TrafficMQTTPublisher()
 
-    print(f"Connecting to {args.port} ...")
-    cam = ArduCamSerial(args.port)
-    print("Connected. Starting capture loop (Ctrl+C to stop).\n")
+    if args.mock:
+        print("MOCK mode: cycling sample images (no hardware).")
+        cam = MockArduCam(args.samples)
+    else:
+        print(f"Connecting to {args.port} ...")
+        cam = ArduCamSerial(args.port)
+    print("Starting capture loop (Ctrl+C to stop).\n")
 
     n = 0
     try:

@@ -116,3 +116,58 @@ def list_ports() -> list[str]:
     except ImportError:
         return []
     return [p.device for p in _lp.comports()]
+
+
+# LED colour name per density level (for the mock's console feedback).
+LED_COLOR = {"Low": "GREEN", "Moderate": "AMBER", "High": "RED"}
+
+
+class MockArduCam:
+    """Drop-in stand-in for :class:`ArduCamSerial` with **no hardware**.
+
+    ``capture()`` returns the next sample image (cycling through a folder) and
+    ``set_led()`` prints what colour the real LED *would* show. Lets you
+    rehearse the full capture -> detect -> density -> LED loop before the
+    Arduino/Arducam is wired up.
+    """
+
+    def __init__(self, image_dir=None, warmup: float = 0.0):
+        from pathlib import Path
+        from . import config
+
+        image_dir = Path(image_dir) if image_dir else config.SAMPLES_DIR
+        exts = {".jpg", ".jpeg", ".png", ".bmp"}
+        self._images = sorted(
+            p for p in image_dir.glob("*") if p.suffix.lower() in exts
+        )
+        if not self._images:
+            raise FileNotFoundError(
+                f"No sample images in {image_dir}. Run "
+                "`python scripts/download_samples.py` first."
+            )
+        self._idx = 0
+        if warmup:
+            time.sleep(warmup)
+
+    def capture(self) -> np.ndarray:
+        path = self._images[self._idx % len(self._images)]
+        self._idx += 1
+        image = cv2.imread(str(path))
+        if image is None:
+            raise ValueError(f"Could not read sample image: {path}")
+        return image
+
+    def set_led(self, density: str) -> None:
+        print(f"    [MOCK LED] {LED_COLOR.get(density, 'OFF')}  ({density})")
+
+    def led_off(self) -> None:
+        print("    [MOCK LED] OFF")
+
+    def close(self) -> None:
+        self.led_off()
+
+    def __enter__(self) -> "MockArduCam":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()

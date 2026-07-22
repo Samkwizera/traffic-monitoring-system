@@ -252,6 +252,15 @@ turns the LED amber, and appends a record to `data/results/detections_log.csv` �
 which flows straight into the dashboard's **Compare** and **Route** tabs. Add
 `--mqtt` to also publish each reading to a broker.
 
+**Rehearse without hardware (`--mock`).** Before the board is wired, run the
+*exact same loop* against the sample images — it prints which colour the LED
+would show, so you can verify the software half end-to-end:
+```bash
+python scripts/live_camera.py --mock --frames 3 --interval 0 --show
+# [1] 29 vehicles ... -> High density     [MOCK LED] RED
+# [2] 1 vehicle ...    -> Low density      [MOCK LED] GREEN
+```
+
 > **If the ArduCAM library won't compile for the Nano 33 BLE** (nRF52840/mbed
 > support varies by library version), the most reliable fallback is to run the
 > OV2640 on an **ESP32-CAM** (streams MJPEG over Wi-Fi — consume it with
