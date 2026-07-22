@@ -1,55 +1,129 @@
 """
-Map rendering for the dashboard (pydeck).
+Map rendering for the dashboard (pydeck) — Google-Maps-style traffic overlay.
 
-Builds an interactive map of the monitored roads:
-  * each road is a marker coloured by its current density (green/amber/red),
-  * the road-graph connections are drawn as thin grey lines, and
-  * the recommended alternative route is highlighted as a thick line.
+Instead of point markers, each monitored road is drawn as a thick line that
+follows the real street geometry and is coloured by its current density:
 
-pydeck ships with Streamlit and uses a Carto basemap by default, so no
-Mapbox API key is required.
+    green = Low   ·   orange = Moderate   ·   red = High
+
+Road geometry is fetched once from the public OSRM routing service (no API key)
+so the coloured lines snap to actual roads and line up with the basemap, then
+cached to disk. If OSRM is unreachable, we fall back to straight lines.
 """
 
 from __future__ import annotations
+
+import json
+import urllib.request
 
 import pandas as pd
 import pydeck as pdk
 
 from . import config
+from .density import density_score
 
-_HIGHLIGHT_RGB = [30, 136, 229]   # blue — the recommended route
+# Bright Google-traffic-like colours for the road overlay.
+ROAD_COLORS = {
+    "Low": [67, 160, 71],       # green
+    "Moderate": [251, 140, 0],  # orange
+    "High": [183, 28, 28],      # dark red
+    "Unknown": [160, 160, 160], # grey (no data yet)
+}
+_DETOUR_RGB = [30, 136, 229]    # blue — the recommended detour
+
+# OSRM geometry cache (endpoints -> list of [lon, lat]).
+_CACHE_FILE = config.RESULTS_DIR / "road_geometry_cache.json"
+_OSRM_URL = (
+    "https://router.project-osrm.org/route/v1/driving/"
+    "{lon1},{lat1};{lon2},{lat2}?overview=full&geometries=geojson"
+)
+
+
+def _load_cache() -> dict:
+    if _CACHE_FILE.exists():
+        try:
+            return json.loads(_CACHE_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_cache(cache: dict) -> None:
+    try:
+        _CACHE_FILE.write_text(json.dumps(cache))
+    except Exception:
+        pass
+
+
+_geom_cache = _load_cache()
+
+
+def _road_geometry(a: tuple, b: tuple) -> list[list[float]]:
+    """Return the driving-road polyline [[lon, lat], ...] between two points.
+
+    Uses OSRM (cached); falls back to a straight segment when offline.
+    ``a`` and ``b`` are (lat, lon) tuples.
+    """
+    key = f"{a[0]:.5f},{a[1]:.5f};{b[0]:.5f},{b[1]:.5f}"
+    if key in _geom_cache:
+        return _geom_cache[key]
+
+    straight = [[a[1], a[0]], [b[1], b[0]]]
+    try:
+        url = _OSRM_URL.format(lon1=a[1], lat1=a[0], lon2=b[1], lat2=b[0])
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            data = json.load(resp)
+        coords = data["routes"][0]["geometry"]["coordinates"]  # [[lon,lat],...]
+        if coords:
+            _geom_cache[key] = coords
+            _save_cache(_geom_cache)
+            return coords
+    except Exception:
+        pass
+    return straight
+
+
+def _worse_density(d1: str, d2: str) -> str:
+    """Return the more-congested of two density levels (colours the segment)."""
+    return d1 if density_score(d1) >= density_score(d2) else d2
+
+
+def _density_by_location(latest_df: pd.DataFrame) -> dict:
+    if latest_df is None or latest_df.empty:
+        return {}
+    return {
+        row["location"]: str(row["density"])
+        for _, row in latest_df.iterrows()
+    }
 
 
 def _nodes_frame(latest_df: pd.DataFrame) -> pd.DataFrame:
-    """One row per monitored road: coords, current density, count, colour."""
-    by_loc = {}
+    """Small camera markers with density/count for tooltips."""
+    dens = _density_by_location(latest_df)
+    counts = {}
     if latest_df is not None and not latest_df.empty:
-        by_loc = latest_df.set_index("location").to_dict("index")
-
+        counts = {r["location"]: int(r["vehicle_count"] or 0)
+                  for _, r in latest_df.iterrows()}
     rows = []
     for name, meta in config.LOCATIONS.items():
         coords = meta.get("coords")
         if not coords:
             continue
-        lat, lon = coords
-        rec = by_loc.get(name, {})
-        density = str(rec.get("density", "Unknown"))
-        count = int(rec.get("vehicle_count", 0) or 0)
+        density = dens.get(name, "Unknown")
         rows.append({
             "location": name,
-            "lat": lat,
-            "lon": lon,
+            "lat": coords[0],
+            "lon": coords[1],
             "density": density,
-            "count": count,
-            "color": config.density_rgb(density),
-            # marker radius grows a little with congestion (metres)
-            "radius": 120 + count * 8,
+            "count": counts.get(name, 0),
+            "color": ROAD_COLORS.get(density, ROAD_COLORS["Unknown"]),
         })
     return pd.DataFrame(rows)
 
 
-def _edges_frame() -> pd.DataFrame:
-    """Undirected road-graph edges as from/to coordinate pairs."""
+def _edges_frame(latest_df: pd.DataFrame) -> pd.DataFrame:
+    """One coloured, road-following path per road-graph connection."""
+    dens = _density_by_location(latest_df)
     seen = set()
     rows = []
     for name, meta in config.LOCATIONS.items():
@@ -64,77 +138,74 @@ def _edges_frame() -> pd.DataFrame:
             if key in seen:
                 continue
             seen.add(key)
+            density = _worse_density(dens.get(name, "Unknown"),
+                                     dens.get(other, "Unknown"))
             rows.append({
-                "from_lon": a[1], "from_lat": a[0],
-                "to_lon": b[1], "to_lat": b[0],
+                "path": _road_geometry(a, b),
+                "color": ROAD_COLORS.get(density, ROAD_COLORS["Unknown"]),
+                "density": density,
+                "segment": f"{name}  ↔  {other}",
             })
     return pd.DataFrame(rows)
 
 
 def build_map(latest_df: pd.DataFrame, rec: dict | None = None) -> pdk.Deck:
-    """Build the pydeck map. ``rec`` is the dict from ``routing.recommend_route``.
+    """Build the pydeck traffic-overlay map.
 
-    If ``rec`` describes a detour (recommended != destination), that edge is
-    drawn highlighted on top of the road graph.
+    ``rec`` is the dict from ``routing.recommend_route``; when it describes a
+    detour, that route is highlighted in blue on top of the coloured roads.
     """
     nodes = _nodes_frame(latest_df)
-    edges = _edges_frame()
+    edges = _edges_frame(latest_df)
 
     layers = [
-        # Road-graph connections (thin grey).
+        # Coloured road segments (the traffic overlay).
         pdk.Layer(
-            "LineLayer",
+            "PathLayer",
             data=edges,
-            get_source_position="[from_lon, from_lat]",
-            get_target_position="[to_lon, to_lat]",
-            get_color=[150, 150, 150],
-            get_width=2,
+            get_path="path",
+            get_color="color",
+            get_width=6,
+            width_min_pixels=5,
+            width_max_pixels=9,
+            cap_rounded=True,
+            joint_rounded=True,
+            pickable=True,
         ),
-        # Road markers coloured by density.
+        # Small camera markers.
         pdk.Layer(
             "ScatterplotLayer",
             data=nodes,
             get_position="[lon, lat]",
-            get_fill_color="color",
-            get_radius="radius",
-            radius_min_pixels=6,
-            radius_max_pixels=40,
-            pickable=True,
-            opacity=0.8,
+            get_fill_color=[255, 255, 255],
+            get_line_color=[60, 60, 60],
+            get_radius=60,
+            radius_min_pixels=3,
+            radius_max_pixels=6,
             stroked=True,
-            get_line_color=[255, 255, 255],
             line_width_min_pixels=1,
-        ),
-        # Road name labels.
-        pdk.Layer(
-            "TextLayer",
-            data=nodes,
-            get_position="[lon, lat]",
-            get_text="location",
-            get_size=12,
-            get_color=[20, 20, 20],
-            get_alignment_baseline="'top'",
-            get_pixel_offset=[0, 12],
+            pickable=True,
         ),
     ]
 
-    # Highlight the recommended detour, if any.
+    # Highlight the recommended detour route (blue), drawn on top.
     if rec and rec.get("recommended") and rec.get("destination") \
             and rec["recommended"] != rec["destination"]:
         a = config.LOCATIONS.get(rec["destination"], {}).get("coords")
         b = config.LOCATIONS.get(rec["recommended"], {}).get("coords")
         if a and b:
-            hl = pd.DataFrame([{
-                "from_lon": a[1], "from_lat": a[0],
-                "to_lon": b[1], "to_lat": b[0],
-            }])
+            hl = pd.DataFrame([{"path": _road_geometry(a, b)}])
             layers.append(pdk.Layer(
-                "LineLayer",
+                "PathLayer",
                 data=hl,
-                get_source_position="[from_lon, from_lat]",
-                get_target_position="[to_lon, to_lat]",
-                get_color=_HIGHLIGHT_RGB,
-                get_width=6,
+                get_path="path",
+                get_color=_DETOUR_RGB,
+                get_width=10,
+                width_min_pixels=8,
+                width_max_pixels=12,
+                cap_rounded=True,
+                joint_rounded=True,
+                opacity=0.6,
             ))
 
     view_state = pdk.ViewState(
@@ -146,6 +217,7 @@ def build_map(latest_df: pd.DataFrame, rec: dict | None = None) -> pdk.Deck:
     return pdk.Deck(
         layers=layers,
         initial_view_state=view_state,
-        map_style=None,   # default Carto basemap (no API key needed)
-        tooltip={"html": "<b>{location}</b><br/>{count} vehicles &mdash; {density}"},
+        map_provider="carto",
+        map_style="road",   # light street basemap (Google-Maps-like)
+        tooltip={"html": "<b>{segment}</b><br/>Traffic: {density}"},
     )
