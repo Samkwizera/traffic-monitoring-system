@@ -40,8 +40,10 @@
 #include <ArduCAM.h>
 #include "memorysaver.h"
 
-#if !(defined OV2640_MINI_2MP_PLUS)
-  #error "Enable #define OV2640_MINI_2MP_PLUS in the ArduCAM library's memorysaver.h"
+// Accept either the original Mini 2MP or the newer Mini 2MP Plus. If captures
+// come back corrupt, switch to the other one in the ArduCAM memorysaver.h.
+#if !(defined(OV2640_MINI_2MP_PLUS) || defined(OV2640_MINI_2MP))
+  #error "Enable OV2640_MINI_2MP (or OV2640_MINI_2MP_PLUS) in ArduCAM memorysaver.h"
 #endif
 
 const int CS = 7;                 // camera chip-select
