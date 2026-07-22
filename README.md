@@ -1,4 +1,4 @@
-# 🚦 Smart Traffic-Density Monitoring System — Rwanda
+# Smart Traffic-Density Monitoring System — Rwanda
 
 A functional prototype that detects and counts vehicles from a traffic **image
 or video**, classifies traffic density as **Low / Moderate / High**, records the
@@ -82,7 +82,7 @@ traffic-monitoring-system/
 
 ## Installation
 
-> ✅ **Python 3.11–3.14 all work.** This prototype was verified on **Python
+> **Python 3.11–3.14 all work.** This prototype was verified on **Python
 > 3.14** (torch 2.13 ships `cp314` wheels). Always install inside a virtual
 > environment so system packages stay clean.
 
@@ -144,11 +144,11 @@ streamlit run app/dashboard.py
 Then open the URL Streamlit prints (usually http://localhost:8501).
 
 **Dashboard tabs**
-- **🔍 Detect** — upload an image/video, view bounding boxes, total count,
+- **Detect** — upload an image/video, view bounding boxes, total count,
   density level and per-class breakdown; save the reading with location + timestamp.
-- **📊 Compare roads** — table + chart ranking every monitored road from clearest
+- **Compare roads** — table + chart ranking every monitored road from clearest
   to busiest, with the current clearest/busiest highlighted.
-- **🧭 Route recommendation** — pick a destination road; get the least-congested
+- **Route recommendation** — pick a destination road; get the least-congested
   connected alternative.
 
 ---
@@ -175,12 +175,12 @@ All tunables live in [`app/config.py`](app/config.py):
 
 The project is built in incremental, working slices:
 
-- **Step 1 — CLI MVP ✅**  `scripts/detect_cli.py`: image/video → count → density → log.
-- **Step 2 — Detection engine ✅**  `app/detector.py`: reusable YOLO wrapper, image & video, bounding boxes.
-- **Step 3 — Records & density ✅**  `app/density.py` + `app/logger.py`: Low/Moderate/High + CSV logging with location/date/time.
-- **Step 4 — Dashboard ✅**  `app/dashboard.py`: upload, visualise, save readings.
-- **Step 5 — Compare & route ✅**  `app/routing.py`: rank roads, recommend alternatives.
-- **Step 6 — Hardware edge node ✅**  Arduino Nano 33 BLE + Arducam OV2640 as a live camera + LED traffic light (see [hardware demo](#hardware-demo-arduino-nano-33-ble--arducam-ov2640)).
+- **Step 1 — CLI MVP** — done.  `scripts/detect_cli.py`: image/video → count → density → log.
+- **Step 2 — Detection engine** — done.  `app/detector.py`: reusable YOLO wrapper, image & video, bounding boxes.
+- **Step 3 — Records & density** — done.  `app/density.py` + `app/logger.py`: Low/Moderate/High + CSV logging with location/date/time.
+- **Step 4 — Dashboard** — done.  `app/dashboard.py`: upload, visualise, save readings.
+- **Step 5 — Compare & route** — done.  `app/routing.py`: rank roads, recommend alternatives.
+- **Step 6 — Hardware edge node** — done.  Arduino Nano 33 BLE + Arducam OV2640 as a live camera + LED traffic light (see [hardware demo](#hardware-demo-arduino-nano-33-ble--arducam-ov2640)).
 - **Step 7 — Full IoT deployment (next)**  many cameras, a database, a map, MQTT/BLE at scale. See below.
 
 ---
@@ -197,7 +197,7 @@ edge node + traffic-light actuator.
 | **Arducam OV2640** | The camera — captures a JPEG frame on request |
 | **Arduino Nano 33 BLE** | Grabs the frame, streams it to the laptop, drives its on-board RGB LED |
 | **Laptop** | Runs YOLO (the Arduino *cannot*), counts vehicles, classifies density |
-| **On-board RGB LED** | The traffic signal: 🟢 Low · 🟠 Moderate · 🔴 High |
+| **On-board RGB LED** | The traffic signal: green = Low, amber = Moderate, red = High |
 
 ```
 [Arducam OV2640] --SPI--> [Nano 33 BLE] <==USB serial==> [Laptop: YOLO -> density]

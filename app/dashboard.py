@@ -40,7 +40,7 @@ from app.routing import rank_roads, recommend_route      # noqa: E402
 # --------------------------------------------------------------------------
 st.set_page_config(
     page_title="Rwanda Smart Traffic Monitor",
-    page_icon="🚦",
+    page_icon=":material/traffic:",
     layout="wide",
 )
 
@@ -63,7 +63,7 @@ def _density_badge(level: str) -> str:
 # --------------------------------------------------------------------------
 # Sidebar controls
 # --------------------------------------------------------------------------
-st.sidebar.title("🚦 Traffic Monitor")
+st.sidebar.title(":material/traffic: Traffic Monitor")
 st.sidebar.caption("Smart Traffic-Density Monitoring System — Rwanda (prototype)")
 
 location = st.sidebar.selectbox(
@@ -97,7 +97,9 @@ st.title("Smart Traffic-Density Monitoring System")
 st.caption("Detect & count vehicles, classify congestion, and find the clearest route.")
 
 tab_detect, tab_compare, tab_route = st.tabs(
-    ["🔍 Detect", "📊 Compare roads", "🧭 Route recommendation"]
+    [":material/search: Detect",
+     ":material/bar_chart: Compare roads",
+     ":material/route: Route recommendation"]
 )
 
 
@@ -147,7 +149,8 @@ with tab_detect:
             st.bar_chart(breakdown.set_index("vehicle type"))
 
         # Save this reading to the log
-        if st.button("💾 Save this reading to the log", type="primary"):
+        if st.button("Save this reading to the log", icon=":material/save:",
+                     type="primary"):
             record = log_detection(
                 result, location=location,
                 source="video" if is_video else "image",
@@ -157,7 +160,8 @@ with tab_detect:
                 f"{record['vehicle_count']} vehicles · {record['density']}"
             )
     else:
-        st.info("👆 Upload a traffic image or short video to begin.")
+        st.info("Upload a traffic image or short video to begin.",
+                icon=":material/upload:")
 
 
 # ---- Tab 2: compare roads -------------------------------------------------
@@ -181,8 +185,10 @@ with tab_compare:
         clearest = ranked.iloc[0]
         busiest = ranked.iloc[-1]
         c1, c2 = st.columns(2)
-        c1.success(f"🟢 Clearest: **{clearest['location']}** ({clearest['density']})")
-        c2.error(f"🔴 Busiest: **{busiest['location']}** ({busiest['density']})")
+        c1.success(f"Clearest: **{clearest['location']}** ({clearest['density']})",
+                   icon=":material/check_circle:")
+        c2.error(f"Busiest: **{busiest['location']}** ({busiest['density']})",
+                 icon=":material/priority_high:")
 
     with st.expander("View full detection log"):
         st.dataframe(load_log(), use_container_width=True, hide_index=True)
@@ -207,7 +213,7 @@ with tab_route:
 
         best = rec["recommended"]
         st.markdown(
-            f"➡️ **Recommended:** {best} — "
+            f":material/arrow_forward: **Recommended:** {best} — "
             + _density_badge(rec["recommended_density"]),
             unsafe_allow_html=True,
         )
